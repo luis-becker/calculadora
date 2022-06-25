@@ -12,7 +12,6 @@ document.querySelectorAll('.teclas button').forEach(b=>{
                 enableAll();
                 break;
             case '(':
-                console.log(b.value)
                 if(!b.disabled) {
                     addOp(b.value);
                     enableAll();
@@ -44,7 +43,6 @@ document.querySelectorAll('.teclas button').forEach(b=>{
 });
 
 function enableAll(){
-    console.log('aqui')
     document.querySelectorAll('.teclas button').forEach(b=>b.disabled=false);
 }
 
@@ -75,18 +73,40 @@ function applyOp(op, value1, value2){
 }
 
 function parseOps(opArray) {
-    opArray = opArray.map(e => {
-        if(e.includes('%'))
-            return e.replace('%','')/100;
-        return +e ? +e : e;
+    opArray = [opArray].flat()
+    opArray = opArray.map(e=>e.split(/([\%\/x+-])/g));
+    let parsed = []
+    opArray.forEach(array => {
+        array = array.filter(e=>e!=='');
+        array = array.map(e => +e ? +e : e);
+        for (let i = 0; i < array.length; i++) {
+            const e = array[i];
+            if(e === '-'){
+                if(typeof array[i-1] !== 'number' && typeof array[i+1] === 'number'){
+                    array[i+1] *= -1;
+                    array.splice(i,1);
+                    i--;
+                }
+            }else if(e === '%'){
+                array[i-1] /= 100;
+                array.splice(i,1)
+                if(typeof array[i] === 'number'){
+                    array.splice(i,0,'x');
+                    i++;
+                }
+            }
+        }
+        parsed.push(array);
     });
-
-    do {
-        index = opArray.findIndex(e => e === '');
-        if (index!=-1) 
-            opArray.splice(index, 3, opArray[index+2]*-1)
-    } while (index!=-1);
-    return opArray
+    let parsedFlat = parsed.flat();
+    for (let i = 0; i < parsedFlat.length-1; i++) {
+        const e = parsedFlat[i];
+        if (typeof e === 'number' && typeof parsedFlat[i+1] === 'number' ){
+            i+=1;
+            parsedFlat.splice(i, 0, 'x');
+        }
+    }
+    return parsedFlat;
 }
 
 function resolveOps(opString){
@@ -98,15 +118,21 @@ function resolveOps(opString){
 }
 
 function resolveOpsRecursive(opString){
-    console.log("IT ->", opString)
-    let regex = /\(([^)]+)\)/g
+    let regex = /\(([^)^]+)\)/g
     let it = opString.matchAll(regex);
+    let results = [];
     for (subOpString of it) {
-        opString = opString.replace(subOpString[0], resolveOpsRecursive(subOpString[1]));
+        results.push(resolveOpsRecursive(subOpString[1]));
     }
-    let opArray = opString.split(/([\/x+-])/g);
+    let opArray = opString.split(/[()]/);
+    let resolve = false;
+    for (let i = 0; i < opArray.length; i++) {
+        if(resolve){
+            opArray[i] = results.shift()
+        }
+        resolve = !resolve;
+    }
     opArray = parseOps(opArray)
-    
     // resolve multiplication and division
     do {  
         index = opArray.findIndex(e => e === '/' || e === 'x');
@@ -126,5 +152,5 @@ function resolveOpsRecursive(opString){
 
     } while (index!=-1);
     
-    return (+opArray[0]).toString()
+    return (+opArray[0]).toString();
 }
